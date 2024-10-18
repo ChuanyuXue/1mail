@@ -1,0 +1,49 @@
+name: 1mail
+
+on:
+  schedule:
+    - cron: '0 15 * * *'  # Run daily at 3PM EST
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  summarize_emails:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.12'
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/src/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r src/requirements.txt
+    - name: Fetch emails
+      env:
+        GMAIL_USER: ${{ secrets.GMAIL_USER }}
+        GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+      run: |
+        python src/gmail.py
+        if [ $? -ne 0 ]; then
+          echo "Email fetcher script failed"
+          exit 1
+        fi
+    - name: Summarize emails
+      env:
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GMAIL_USER: ${{ secrets.GMAIL_USER }}
+        GMAIL_PASSWORD: ${{ secrets.GMAIL_PASSWORD }}
+        RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+      run: |
+        python src/gpt.py
+        if [ $? -ne 0 ]; then
+          echo "GPT summarizer script failed"
+          exit 1
+        fi
